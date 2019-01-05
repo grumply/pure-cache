@@ -1,6 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes, GADTs, ImplicitParams, ScopedTypeVariables, TypeApplications, RecordWildCards, RankNTypes, ConstraintKinds #-}
 module Pure.Cache
   ( Caching, caching
+  , Cache
   , load, store, delete
   ) where
 
