@@ -1,4 +1,4 @@
-{-# LANGUAGE AllowAmbiguousTypes, GADTs, ScopedTypeVariables #-}
+{-# LANGUAGE AllowAmbiguousTypes, GADTs, ScopedTypeVariables, TypeApplications #-}
 module Pure.Cache.DynamicMap where
 
 import Data.Dynamic
@@ -32,11 +32,17 @@ fromOrdDyn (OrdDynamic t a)
     rep = typeRep :: TypeRep a
 
 type TypedMap v = Map Typeable.TypeRep v
-data DynamicMap = DynamicMap (TypedMap (Map OrdDynamic (TypedMap Dynamic)))
+type DynamicOrdMap = Map OrdDynamic (TypedMap Dynamic)
+data DynamicMap = DynamicMap (TypedMap DynamicOrdMap)
+-- Basically this:
+--   (Typeable key, Ord key, Typeable value)
+--      => TypeRep key -> (key -> (TypeRep value -> value))
 
 empty :: DynamicMap
 empty = DynamicMap mempty
 
+-- | Lookup a value of type `v` at the given key of type `k`.
+-- Use may require a type signature or visible type application for `v`.
 loadDyn :: forall v k. (Ord k, Typeable k, Typeable v) => k -> DynamicMap -> Maybe v
 loadDyn k (DynamicMap dm) = do
   m1 <- Map.lookup repk dm
@@ -47,6 +53,7 @@ loadDyn k (DynamicMap dm) = do
     repk = Typeable.typeOf (undefined :: k)
     repv = Typeable.typeOf (undefined :: v)
 
+-- | Store a given value of type `v` at the given key of type `k`.
 storeDyn :: forall k v. (Ord k, Typeable k, Typeable v) => k -> v -> DynamicMap -> DynamicMap
 storeDyn k v (DynamicMap dm) = DynamicMap (Map.alter alter repk dm)
   where
@@ -63,10 +70,13 @@ storeDyn k v (DynamicMap dm) = DynamicMap (Map.alter alter repk dm)
         alter' Nothing  = Just (Map.singleton repv dv)
         alter' (Just m) = Just (Map.insert repv dv m)
 
--- | `deleteDyn` requires a visible type application
+-- | Delete a value of type `v` at the given key of type `k`.
+--
+-- Use will require a visible type application for `v`:
 --
 -- > deleteDyn @Int someKey someDynamicMap
 -- > --        ^ the type of value that will be deleted
+--
 deleteDyn :: forall v k. (Ord k, Typeable k, Typeable v) => k -> DynamicMap -> DynamicMap
 deleteDyn k (DynamicMap dm) = DynamicMap (Map.update update repk dm)
   where
@@ -89,3 +99,43 @@ deleteDyn k (DynamicMap dm) = DynamicMap (Map.update update repk dm)
               0 -> Nothing
               _ -> Just m'
 
+-- | Delete a value of type `v` at the given key of type `k`.
+deleteDynProxy :: forall v k. (Ord k, Typeable k, Typeable v) => Proxy v -> k -> DynamicMap -> DynamicMap
+deleteDynProxy _ = deleteDyn @v
+
+-- | Delete all values of all types stored at the given key `k`.
+flushDyn :: forall k. (Ord k, Typeable k) => k -> DynamicMap -> DynamicMap
+flushDyn k (DynamicMap dm) = DynamicMap (Map.update update repk dm)
+  where
+    repk = Typeable.typeOf (undefined :: k)
+
+    odk = toOrdDyn k
+
+    update :: Map OrdDynamic (Map Typeable.TypeRep Dynamic) -> Maybe (Map OrdDynamic (Map Typeable.TypeRep Dynamic))
+    update m =
+      let m' = Map.delete odk m
+      in case Map.size m' of
+           0 -> Nothing
+           _ -> Just m'
+
+-- | Delete all values of all types stored at all keys of type `k`.
+--
+-- Use will require a visible type application for `k`.
+--
+-- > flushAllDyn @Int someDynamicMap
+-- >             ^ delete everything with an Int key
+--
+flushAllDyn :: forall k. Typeable k => DynamicMap -> DynamicMap
+flushAllDyn (DynamicMap dm) = DynamicMap (Map.delete repk dm)
+  where
+    repk = Typeable.typeOf (undefined :: k)
+
+-- | Delete all values of all types stored at all keys of type `k`.
+flushAllDynProxy :: forall k. (Ord k, Typeable k) => Proxy k -> DynamicMap -> DynamicMap
+flushAllDynProxy _ = flushAllDyn @k
+
+-- | Delete all values of all types stored at all keys.
+--
+-- Equivalent to `const empty`.
+clearDyn :: DynamicMap -> DynamicMap
+clearDyn _ = Pure.Cache.DynamicMap.empty
