@@ -1,4 +1,4 @@
-{-# LANGUAGE AllowAmbiguousTypes, GADTs, ImplicitParams, ScopedTypeVariables, TypeApplications, RecordWildCards, RankNTypes, ConstraintKinds #-}
+{-# LANGUAGE AllowAmbiguousTypes, GADTs, ImplicitParams, ScopedTypeVariables, TypeApplications, RecordWildCards, RankNTypes, ConstraintKinds, BangPatterns #-}
 module Pure.Cache
   ( Caching, caching
   , Cache
