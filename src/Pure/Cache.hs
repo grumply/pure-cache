@@ -97,7 +97,7 @@ data Cacher = Cacher (Caching => View)
 -- to pass it around as a function parameter. But, this means nesting caches can
 -- cause confusion, so take care in where you place your cache in the hierarchy.
 caching :: (Caching => View) -> View
-caching v = flip LibraryComponentIO (Cacher v) $ \self ->
+caching v = flip Component (Cacher v) $ \self ->
   let
     store :: forall v k. (Ord k, Typeable k, Typeable v) => k -> v -> IO ()
     store k v = modify_ self $ \_ (dm,_) -> (storeDyn k v dm,True)
